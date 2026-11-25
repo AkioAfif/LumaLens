@@ -15,7 +15,7 @@ flowchart LR
         LAMBDA["Lambda<br/>lumalens-api<br/>(Node.js 20)"]
         DDB[("DynamoDB<br/>LumaLensReports")]
         CW["CloudWatch Logs"]
-        S3[("S3<br/>lumalens-shots-NIU<br/>(planned)")]
+        S3[("S3<br/>lumalens-shots-542230<br/>(planned)")]
     end
 
     CURL -->|HTTPS + x-lumalens-key| APIGW
@@ -37,7 +37,7 @@ Solid lines exist today; dashed lines are planned for later weeks.
 3. The Lambda checks the API key against the `LUMALENS_KEY` env var using a constant-time compare and returns 401 if it is missing or wrong.
 4. The Lambda routes on method and path (`POST/GET /bugs`, `GET/PUT/DELETE /bugs/{id}`), validates the body with zod, and calls DynamoDB through `DynamoDBDocumentClient`. The table name comes from the `TABLE_NAME` env var.
 5. The response goes back through API Gateway as JSON. Unexpected errors are written to CloudWatch Logs with `console.error`, and the client only gets `{"error":"internal_error"}`.
-6. Planned: the Lambda presigns an S3 PUT URL, and the Unity client uploads screenshots and logs straight to `lumalens-shots-NIU`. Only the object keys (`screenshotKey`, `logKey`) are stored on the report.
+6. Planned: the Lambda presigns an S3 PUT URL, and the Unity client uploads screenshots and logs straight to `lumalens-shots-542230`. Only the object keys (`screenshotKey`, `logKey`) are stored on the report.
 
 ## IAM
 
@@ -64,8 +64,8 @@ Solid lines exist today; dashed lines are planned for later weeks.
       "Effect": "Allow",
       "Action": "s3:PutObject",
       "Resource": [
-        "arn:aws:s3:::lumalens-shots-NIU/screenshots/*",
-        "arn:aws:s3:::lumalens-shots-NIU/logs/*"
+        "arn:aws:s3:::lumalens-shots-542230/screenshots/*",
+        "arn:aws:s3:::lumalens-shots-542230/logs/*"
       ]
     }
   ]

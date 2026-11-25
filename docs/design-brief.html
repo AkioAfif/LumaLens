@@ -31,7 +31,7 @@
 <body>
 
 <h1>LumaLens — Design Brief</h1>
-<div class="meta">Cloud Computing · Week 12 · Track C (Serverless) · AWS Learner Lab, us-east-1 · Akio Afif ·
+<div class="meta">Cloud Computing · Week 12 · Track C (Serverless) · AWS Learner Lab, us-east-1 · Akio Afif (NIU 542230) ·
   Repo: <code>github.com/AkioAfif/LumaLens</code></div>
 
 <div class="pitch"><strong>Pitch:</strong> an engine-agnostic HTTP API with a reference Unity client that auto-captures
@@ -99,7 +99,7 @@
 <table>
   <tr><th style="width:20%">Area</th><th style="width:40%">Actual (Learner Lab)</th><th>Intended (production)</th></tr>
   <tr><td>Lambda role</td><td><strong>LabRole</strong>. Learner Lab cannot create IAM roles, and LabRole is broader than needed.</td>
-      <td>Custom role: <code>dynamodb:PutItem/GetItem/Scan/UpdateItem/DeleteItem</code> on the <code>LumaLensReports</code> ARN only; <code>s3:PutObject</code> on <code>lumalens-shots-&lt;NIU&gt;/screenshots/*</code> and <code>/logs/*</code> only; basic CloudWatch Logs.</td></tr>
+      <td>Custom role: <code>dynamodb:PutItem/GetItem/Scan/UpdateItem/DeleteItem</code> on the <code>LumaLensReports</code> ARN only; <code>s3:PutObject</code> on <code>lumalens-shots-542230/screenshots/*</code> and <code>/logs/*</code> only; basic CloudWatch Logs.</td></tr>
   <tr><td>API GW → Lambda</td><td>Resource-based policy added by the integration</td><td>Same</td></tr>
   <tr><td>Client auth</td><td><code>x-lumalens-key</code> header compared in constant time with the <code>LUMALENS_KEY</code> env var. The key ships inside builds and can be extracted.</td>
       <td>Cognito JWT authorizer, or one key per project so that a leaked build can be revoked on its own</td></tr>

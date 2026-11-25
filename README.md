@@ -152,5 +152,5 @@ Save screenshots in `docs/evidence/`. Each one should show the region.
 - [ ] `npm run test:crud` terminal output (full cycle and the 401)
 - [ ] DynamoDB Explore items showing a created item before deletion (`node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt` leaves one item in the table)
 - [ ] CloudWatch log group `/aws/lambda/lumalens-api` with the test requests
-- [ ] (Optional) S3 bucket `lumalens-shots-<NIU>` with Block Public Access on
+- [ ] (Optional) S3 bucket `lumalens-shots-542230` with Block Public Access on
 - [ ] Learner Lab panel showing the remaining budget
