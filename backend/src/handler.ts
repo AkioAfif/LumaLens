@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
@@ -9,7 +9,18 @@ import {
   UpdateCommand,
   type ScanCommandInput,
 } from '@aws-sdk/lib-dynamodb';
-import { created, internalError, noContent, notFound, ok, badRequest, type HttpResponse } from './http.js';
+import type { ZodType } from 'zod';
+import {
+  badRequest,
+  created,
+  internalError,
+  noContent,
+  notFound,
+  ok,
+  unauthorized,
+  type HttpResponse,
+} from './http.js';
+import { BugReportCreate, BugReportUpdate, ListQuery } from './validation.js';
 
 /** Minimal subset of the API Gateway HTTP API payload v2.0 event that we use. */
 export interface HttpApiEvent {
@@ -34,6 +45,31 @@ const tableName = (): string => {
 };
 
 class InvalidJson extends Error {}
+
+class ValidationFailed extends Error {
+  constructor(readonly issues: unknown[]) {
+    super('validation_failed');
+  }
+}
+
+function validate<T>(schema: ZodType<T>, input: unknown): T {
+  const result = schema.safeParse(input);
+  if (!result.success) throw new ValidationFailed(result.error.issues);
+  return result.data;
+}
+
+/**
+ * Constant-time API key check. Both sides are hashed first so the compared
+ * buffers always have equal length (timingSafeEqual requires it) and the key
+ * length is not leaked. Fails closed if LUMALENS_KEY is not configured.
+ */
+function isAuthorized(event: HttpApiEvent): boolean {
+  const expected = process.env.LUMALENS_KEY;
+  const provided = event.headers?.['x-lumalens-key'];
+  if (!expected || !provided) return false;
+  const digest = (v: string) => createHash('sha256').update(v, 'utf8').digest();
+  return timingSafeEqual(digest(provided), digest(expected));
+}
 
 function parseBody(event: HttpApiEvent): unknown {
   const raw = event.isBase64Encoded && event.body
@@ -62,7 +98,7 @@ function routePath(event: HttpApiEvent): string {
 
 // ---- CRUD ----------------------------------------------------------------
 
-async function createBug(input: Record<string, unknown>): Promise<HttpResponse> {
+async function createBug(input: BugReportCreate): Promise<HttpResponse> {
   const now = new Date().toISOString();
   const item = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
   await ddb.send(new PutCommand({
@@ -73,7 +109,7 @@ async function createBug(input: Record<string, unknown>): Promise<HttpResponse> 
   return created(item);
 }
 
-async function listBugs(filters: { status?: string; buildVersion?: string }): Promise<HttpResponse> {
+async function listBugs(filters: ListQuery): Promise<HttpResponse> {
   const clauses: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
@@ -113,7 +149,7 @@ async function getBug(id: string): Promise<HttpResponse> {
   return res.Item ? ok(res.Item) : notFound();
 }
 
-async function updateBug(id: string, changes: Record<string, unknown>): Promise<HttpResponse> {
+async function updateBug(id: string, changes: BugReportUpdate): Promise<HttpResponse> {
   const fields = { ...changes, updatedAt: new Date().toISOString() };
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = {};
@@ -160,10 +196,10 @@ async function route(event: HttpApiEvent): Promise<HttpResponse> {
   const path = routePath(event);
 
   if (path === '/bugs') {
-    if (method === 'POST') return createBug(parseBody(event) as Record<string, unknown>);
+    if (method === 'POST') return createBug(validate(BugReportCreate, parseBody(event)));
     if (method === 'GET') {
       const q = event.queryStringParameters ?? {};
-      return listBugs({ status: q.status, buildVersion: q.buildVersion });
+      return listBugs(validate(ListQuery, { status: q.status, buildVersion: q.buildVersion }));
     }
     return notFound();
   }
@@ -172,7 +208,7 @@ async function route(event: HttpApiEvent): Promise<HttpResponse> {
   if (match?.[1]) {
     const id = decodeURIComponent(match[1]);
     if (method === 'GET') return getBug(id);
-    if (method === 'PUT') return updateBug(id, parseBody(event) as Record<string, unknown>);
+    if (method === 'PUT') return updateBug(id, validate(BugReportUpdate, parseBody(event)));
     if (method === 'DELETE') return deleteBug(id);
   }
   return notFound();
@@ -180,9 +216,11 @@ async function route(event: HttpApiEvent): Promise<HttpResponse> {
 
 export async function handler(event: HttpApiEvent): Promise<HttpResponse> {
   try {
+    if (!isAuthorized(event)) return unauthorized();
     return await route(event);
   } catch (err) {
     if (err instanceof InvalidJson) return badRequest('invalid_json');
+    if (err instanceof ValidationFailed) return badRequest('validation_failed', err.issues);
     console.error('Unhandled error', err);
     return internalError();
   }
