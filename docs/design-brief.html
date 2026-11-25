@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LumaLens — Design Brief</title>
+<!-- Source for design-brief.pdf. Re-export: open in Edge → Print → Save as PDF (A4, no headers/footers),
+     or: msedge --headless --print-to-pdf=docs/design-brief.pdf --no-pdf-header-footer docs/design-brief.html -->
+<style>
+  @page { size: A4; margin: 14mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 9.1pt; line-height: 1.33; color: #1d1d1f; margin: 0; }
+  h1 { font-size: 17pt; margin: 0 0 1mm; letter-spacing: -0.01em; }
+  .meta { color: #5f5f66; font-size: 9pt; margin-bottom: 3mm; }
+  h2 { font-size: 11pt; margin: 3.2mm 0 1.2mm; padding-bottom: 0.6mm; border-bottom: 1px solid #d8d8dc; }
+  p { margin: 0 0 1.6mm; }
+  ul { margin: 0 0 1.6mm; padding-left: 4.5mm; }
+  li { margin-bottom: 0.6mm; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.6pt; background: #f2f2f4; padding: 0 2px; border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 0.6mm 0 1.4mm; font-size: 8.5pt; }
+  th, td { text-align: left; vertical-align: top; padding: 0.7mm 1.4mm; border: 1px solid #dcdce0; }
+  th { background: #f4f4f6; font-weight: 600; }
+  .pitch { background: #eef3fb; border-left: 3px solid #2f6fd1; padding: 1.6mm 2.4mm; margin: 0 0 2mm; }
+  figure { margin: 1mm 0 1.5mm; text-align: center; }
+  figure img { width: 56%; }
+  figcaption { font-size: 8.4pt; color: #5f5f66; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .page-break { break-before: page; }
+  .muted { color: #5f5f66; }
+</style>
+</head>
+<body>
+
+<h1>LumaLens — Design Brief</h1>
+<div class="meta">Cloud Computing · Week 12 · Track C (Serverless) · AWS Learner Lab, us-east-1 · Akio Afif ·
+  Repo: <code>github.com/AkioAfif/LumaLens</code></div>
+
+<div class="pitch"><strong>Pitch:</strong> an engine-agnostic HTTP API with a reference Unity client that auto-captures
+  build-only errors and diffs editor vs build environments, for game jam developers.</div>
+
+<h2>1. Problem and users</h2>
+<p>Some bugs only appear in the built game, never in the editor, and often show no visible error. In my own project,
+  buildings that block the player should turn see-through: it works in Play Mode but not in the build, with no console
+  error (likely a stripped shader variant). In a game jam the build goes to itch.io at the last minute, and players report vaguely, if at all.</p>
+<ul>
+  <li><strong>Primary users:</strong> game jam developers (solo or small teams), mostly shipping WebGL builds to itch.io.</li>
+  <li><strong>Secondary user:</strong> myself, as a dev tool across Unity and Godot projects.</li>
+  <li><strong>Core need:</strong> know <em>that</em> a build-only bug happened, <em>on which build and machine</em>, and
+    <em>what differs from the editor</em>, without asking players for detailed reports.</li>
+</ul>
+
+<h2>2. Existing tools and the gap</h2>
+<p>In-game bug reporting is a crowded space: Unity User Reporting (Unity only), BetaHub and Bugnet (hosted SaaS),
+  Codecks (project management first) and Asset Store reporters (forward reports to Trello/Jira/Discord, no build
+  analysis). We did not find a tool that combines an engine-agnostic HTTP API that you self-host on your own AWS with
+  three features aimed at build-only bugs: automatic exception capture, an editor↔build environment diff, and a WebGL
+  loader-error snippet.</p>
+
+<h2>3. Architecture</h2>
+<figure>
+  <img src="architecture.png" alt="LumaLens architecture: clients call API Gateway, which invokes the lumalens-api Lambda, which reads and writes DynamoDB and logs to CloudWatch; S3 is planned.">
+</figure>
+<ul>
+  <li><strong>API Gateway HTTP API</strong> (payload 2.0, Lambda proxy) exposes 5 routes on <code>/bugs</code>. HTTP API was chosen over REST API because it is cheaper and simpler and we need no REST-only features.</li>
+  <li><strong>One Lambda, <code>lumalens-api</code></strong> (Node.js 20, TypeScript bundled with esbuild, ~116 KB zip) routes,
+    validates with zod, checks the API key and talks to DynamoDB with AWS SDK v3. The SDK comes from the runtime, so it is not bundled.</li>
+  <li><strong>DynamoDB <code>LumaLensReports</code></strong>, partition key <code>id</code>, on-demand capacity: no servers, and we pay per request.</li>
+  <li><strong>CloudWatch Logs</strong> keeps request and error logs. Unexpected errors are logged in full, but clients only see <code>internal_error</code>.</li>
+</ul>
+
+<h2>4. Scope</h2>
+<table>
+  <tr><th style="width:18%">When</th><th>Feature</th></tr>
+  <tr><td><strong>Week 12 (this)</strong></td><td>BugReport CRUD, API key check and validation, provisioned and tested on AWS.</td></tr>
+  <tr><td>Week 13+</td><td>Unity client: auto exception capture, editor↔build diff, Player.log tail + screenshots to S3 (presigned).</td></tr>
+  <tr><td>Week 14+</td><td>WebGL loader-error snippet (reports “game won’t load” before Unity starts); CORS for browser clients.</td></tr>
+  <tr><td>Out of scope</td><td>Crash dump symbolication, user accounts, team permissions, a project management board.</td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<h2>5. Data model and API</h2>
+<p>One entity, <code>BugReport</code>. Required: <code>title</code> (1–120), <code>severity</code> (low/medium/high/crash),
+  <code>engine</code> (unity/godot/unreal/web), <code>runContext</code> (editor/build), <code>buildVersion</code> (≤32),
+  <code>platform</code> (windows/webgl/android/linux/mac). Optional: <code>description</code>, <code>scene</code>,
+  <code>posX/Y/Z</code> + <code>coordSpace</code> (2d/3d), <code>envSnapshot</code>, <code>logKey</code>, <code>screenshotKey</code>.
+  Defaults: <code>status</code> = open, <code>source</code> = manual. The server sets <code>id</code> (UUID),
+  <code>createdAt</code> and <code>updatedAt</code>. Create is strict: unknown or server-owned fields return 400. The full contract
+  is in <code>docs/openapi.yaml</code> (OpenAPI 3.0.3, linted with Redocly), and every engine client follows it.</p>
+<table>
+  <tr><th>Operation</th><th>Route</th><th>Success</th><th>Errors</th></tr>
+  <tr><td>Create</td><td><code>POST /bugs</code></td><td>201 + item</td><td>400, 401</td></tr>
+  <tr><td>Read</td><td><code>GET /bugs</code> (<code>?status=</code>, <code>?buildVersion=</code>) · <code>GET /bugs/{id}</code></td><td>200 list (newest first, ≤500) / item</td><td>400, 401, 404</td></tr>
+  <tr><td>Update</td><td><code>PUT /bugs/{id}</code> (only status, severity, description)</td><td>200 + updated item</td><td>400, 401, 404</td></tr>
+  <tr><td>Delete</td><td><code>DELETE /bugs/{id}</code></td><td>204</td><td>401, 404</td></tr>
+</table>
+<p>Conditional writes (<code>attribute_not_exists</code> / <code>attribute_exists</code>) turn a missing item into a 404 instead of creating it by accident. <code>GET /bugs</code> uses a Scan at personal scale. The scaling path is a GSI on <code>status</code> or <code>buildVersion</code>.</p>
+
+<h2>6. IAM and security</h2>
+<table>
+  <tr><th style="width:20%">Area</th><th style="width:40%">Actual (Learner Lab)</th><th>Intended (production)</th></tr>
+  <tr><td>Lambda role</td><td><strong>LabRole</strong>. Learner Lab cannot create IAM roles, and LabRole is broader than needed.</td>
+      <td>Custom role: <code>dynamodb:PutItem/GetItem/Scan/UpdateItem/DeleteItem</code> on the <code>LumaLensReports</code> ARN only; <code>s3:PutObject</code> on <code>lumalens-shots-&lt;NIU&gt;/screenshots/*</code> and <code>/logs/*</code> only; basic CloudWatch Logs.</td></tr>
+  <tr><td>API GW → Lambda</td><td>Resource-based policy added by the integration</td><td>Same</td></tr>
+  <tr><td>Client auth</td><td><code>x-lumalens-key</code> header compared in constant time with the <code>LUMALENS_KEY</code> env var. The key ships inside builds and can be extracted.</td>
+      <td>Cognito JWT authorizer, or one key per project so that a leaked build can be revoked on its own</td></tr>
+  <tr><td>S3 (planned)</td><td>Block Public Access on; uploads only via short-lived presigned URLs (<code>image/png</code>, <code>text/plain</code>)</td><td>Same, plus a lifecycle rule to expire old logs</td></tr>
+  <tr><td>AWS credentials</td><td>Only in <code>~/.aws/credentials</code> locally, refreshed each lab session; never in the repo or a build</td><td>CI secrets</td></tr>
+</table>
+
+<div class="two">
+<div>
+<h2>7. Network</h2>
+<ul>
+  <li><strong>No custom VPC, on purpose.</strong> Lambda reaches DynamoDB and S3 over their HTTPS endpoints. A VPC would need a NAT Gateway (hourly cost against a budget that cannot be reset) or VPC endpoints, and would add nothing here.</li>
+  <li><strong>Trust boundary 1</strong>, internet → API Gateway: TLS only, API key checked in Lambda.</li>
+  <li><strong>Trust boundary 2</strong>, inside AWS: Lambda → DynamoDB/S3 through IAM-authorized SDK calls.</li>
+  <li><strong>Abuse protection:</strong> stage throttling of 10 req/s, burst 20.</li>
+  <li><strong>CORS:</strong> not needed for native builds. It will be enabled for the itch.io origins when the WebGL snippet ships.</li>
+</ul>
+</div>
+<div>
+<h2>8. Cost and risks</h2>
+<ul>
+  <li><strong>Cost:</strong> everything is pay-per-request (HTTP API, Lambda, on-demand DynamoDB) and nothing runs while idle. At course scale it stays near zero.</li>
+  <li><strong>IAM role creation blocked:</strong> always pick <em>Use an existing role → LabRole</em>. The least-privilege policy is documented above as the intended design.</li>
+  <li><strong>Embedded key extracted:</strong> throttling now, per-project keys or JWT later.</li>
+  <li><strong>Stripped shader variants may not raise a log message</strong>, so auto-capture can miss them. The Player.log tail (Week 13+) covers this case.</li>
+</ul>
+</div>
+</div>
+
+<h2>9. Verification</h2>
+<p>Locally, 22 unit tests (vitest + aws-sdk-client-mock) cover auth, validation, every status code and the DynamoDB
+  conditions. On AWS, <code>scripts/test-crud.mjs</code> runs 401 → POST 201 → GET 200 → list 200 → PUT 200 → DELETE 204 → GET 404
+  and saves the transcript to <code>docs/evidence/crud-test.txt</code>, next to the console screenshots.</p>
+
+</body>
+</html>
