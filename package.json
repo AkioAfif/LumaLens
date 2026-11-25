@@ -1,0 +1,12 @@
+{
+  "name": "lumalens",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Engine-agnostic bug-capture API for game builds",
+  "scripts": {
+    "lint:openapi": "redocly lint docs/openapi.yaml"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.83.0"
+  }
+}

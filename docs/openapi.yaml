@@ -1,0 +1,338 @@
+openapi: 3.0.3
+info:
+  title: LumaLens API
+  version: 0.1.0
+  description: Engine-agnostic bug-capture API for game builds.
+servers:
+  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com
+    description: API Gateway HTTP API ($default stage)
+    variables:
+      apiId:
+        default: your-api-id
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: bugs
+    description: Bug report CRUD
+paths:
+  /bugs:
+    post:
+      tags: [bugs]
+      operationId: createBug
+      summary: Create a bug report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BugReportCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      tags: [bugs]
+      operationId: listBugs
+      summary: List bug reports (newest first, max 500)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Status'
+        - name: buildVersion
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, count]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 500
+                    items:
+                      $ref: '#/components/schemas/BugReport'
+                  count:
+                    type: integer
+                    minimum: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /bugs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [bugs]
+      operationId: getBug
+      summary: Get one bug report
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReport'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [bugs]
+      operationId: updateBug
+      summary: Update status, severity or description
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BugReportUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [bugs]
+      operationId: deleteBug
+      summary: Delete a bug report
+      responses:
+        '204':
+          description: Deleted (empty body)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-lumalens-key
+  responses:
+    BadRequest:
+      description: Invalid JSON (`invalid_json`) or validation failure (`validation_failed`)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or wrong x-lumalens-key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Bug report or route not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Severity:
+      type: string
+      enum: [low, medium, high, crash]
+    Status:
+      type: string
+      enum: [open, in_progress, fixed, wontfix]
+    Source:
+      type: string
+      enum: [manual, auto]
+    Engine:
+      type: string
+      enum: [unity, godot, unreal, web]
+    RunContext:
+      type: string
+      enum: [editor, build]
+    Platform:
+      type: string
+      enum: [windows, webgl, android, linux, mac]
+    CoordSpace:
+      type: string
+      enum: [2d, 3d]
+    BugReportCreate:
+      type: object
+      additionalProperties: false
+      required: [title, severity, engine, runContext, buildVersion, platform]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        severity:
+          $ref: '#/components/schemas/Severity'
+        status:
+          allOf:
+            - $ref: '#/components/schemas/Status'
+          default: open
+        source:
+          allOf:
+            - $ref: '#/components/schemas/Source'
+          default: manual
+        engine:
+          $ref: '#/components/schemas/Engine'
+        runContext:
+          $ref: '#/components/schemas/RunContext'
+        buildVersion:
+          type: string
+          minLength: 1
+          maxLength: 32
+        platform:
+          $ref: '#/components/schemas/Platform'
+        scene:
+          type: string
+          maxLength: 120
+        posX:
+          type: number
+        posY:
+          type: number
+        posZ:
+          type: number
+        coordSpace:
+          $ref: '#/components/schemas/CoordSpace'
+        envSnapshot:
+          type: object
+          additionalProperties: true
+        logKey:
+          type: string
+        screenshotKey:
+          type: string
+    BugReportUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: At least one of status, severity, description.
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        description:
+          type: string
+          maxLength: 2000
+    BugReport:
+      type: object
+      required:
+        - id
+        - title
+        - severity
+        - status
+        - source
+        - engine
+        - runContext
+        - buildVersion
+        - platform
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        severity:
+          $ref: '#/components/schemas/Severity'
+        status:
+          $ref: '#/components/schemas/Status'
+        source:
+          $ref: '#/components/schemas/Source'
+        engine:
+          $ref: '#/components/schemas/Engine'
+        runContext:
+          $ref: '#/components/schemas/RunContext'
+        buildVersion:
+          type: string
+          minLength: 1
+          maxLength: 32
+        platform:
+          $ref: '#/components/schemas/Platform'
+        scene:
+          type: string
+          maxLength: 120
+        posX:
+          type: number
+        posY:
+          type: number
+        posZ:
+          type: number
+        coordSpace:
+          $ref: '#/components/schemas/CoordSpace'
+        envSnapshot:
+          type: object
+          additionalProperties: true
+        logKey:
+          type: string
+        screenshotKey:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: validation_failed
+        details:
+          type: array
+          description: zod issues (only for validation_failed)
+          items:
+            type: object
+            additionalProperties: true
