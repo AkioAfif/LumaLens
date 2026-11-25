@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "Engine-agnostic bug-capture API for game builds",
   "scripts": {
-    "lint:openapi": "redocly lint docs/openapi.yaml"
+    "lint:openapi": "redocly lint docs/openapi.yaml",
+    "deploy": "node scripts/deploy.mjs",
+    "test:crud": "node scripts/test-crud.mjs"
   },
   "devDependencies": {
     "@redocly/cli": "^2.83.0"

@@ -64,13 +64,93 @@ npm run typecheck   # tsc --noEmit, strict
 npm run build       # -> backend/dist/index.js and backend/dist/function.zip
 ```
 
-To lint the OpenAPI contract, from the repo root:
+From the repo root:
 
 ```powershell
 npm ci
-npm run lint:openapi
+npm run lint:openapi   # validate docs/openapi.yaml
+npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4)
+npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 5)
 ```
+
+Repo layout: `backend/` (Lambda source, tests, build script), `docs/` (architecture, OpenAPI, design brief, evidence), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
 
 ## Deploy (Learner Lab)
 
-TODO: next step. Upload `backend/dist/function.zip` to the `lumalens-api` Lambda (Node.js 20, handler `index.handler`, role `LabRole`, env vars `TABLE_NAME` and `LUMALENS_KEY`), then create the `LumaLensReports` table and the HTTP API routes.
+Everything goes in **us-east-1**. Learner Lab can't create IAM roles: whenever a console wizard offers to create a role, pick **Use an existing role → LabRole**. Everything here is serverless and on-demand (no NAT Gateway), so the lab budget only pays for actual requests.
+
+### 0. Before the lab session
+
+```powershell
+cd backend
+npm ci
+npm test
+npm run build        # -> backend/dist/function.zip
+cd ..
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"   # your LUMALENS_KEY
+```
+
+Keep the generated key out of the repo.
+
+### 1. DynamoDB table
+
+DynamoDB → **Create table**
+- Table name `LumaLensReports`, partition key `id` (String), no sort key
+- Table settings → **Customize settings** → Capacity mode **On-demand**
+
+### 2. Lambda function
+
+Lambda → **Create function** → Author from scratch
+- Name `lumalens-api`, runtime **Node.js 20.x**, architecture x86_64
+- Permissions → Change default execution role → **Use an existing role → LabRole**
+
+Then on the function:
+- Code → **Upload from → .zip file** → `backend/dist/function.zip`
+- Code → Runtime settings → Handler `index.handler`
+- Configuration → Environment variables: `TABLE_NAME` = `LumaLensReports`, `LUMALENS_KEY` = the key from step 0
+- Configuration → General configuration → Timeout 10 s (the 3 s default can be tight on a cold start)
+
+### 3. HTTP API
+
+API Gateway → **Create API** → HTTP API → Build
+- Integration: Lambda, `lumalens-api`, us-east-1 (payload format 2.0 is the default)
+- API name `lumalens-http`
+- Routes, all to the `lumalens-api` integration: `POST /bugs`, `GET /bugs`, `GET /bugs/{id}`, `PUT /bugs/{id}`, `DELETE /bugs/{id}`
+- Stage `$default`, auto-deploy on
+
+Then Protect → **Throttling** → edit the `$default` stage: rate **10**, burst **20**.
+
+The integration adds the resource-based policy on the Lambda that lets API Gateway invoke it (visible under Lambda → Configuration → Permissions).
+
+### 4. Test the deployed API
+
+```powershell
+$env:LUMALENS_API_URL = "https://<api-id>.execute-api.us-east-1.amazonaws.com"
+$env:LUMALENS_KEY = "<key from step 0>"
+npm run test:crud    # 401 without key, POST 201, GET 200, list 200, PUT 200, DELETE 204, GET 404
+```
+
+The transcript is saved to `docs/evidence/crud-test.txt`, with the key masked.
+
+### 5. Redeploying code changes
+
+Paste the Learner Lab **AWS Details → AWS CLI** credentials into `~/.aws/credentials` (they expire with each session), then:
+
+```powershell
+npm --prefix backend run build
+npm run deploy       # aws lambda update-function-code for lumalens-api
+```
+
+### Evidence checklist
+
+Save screenshots in `docs/evidence/`. Each one should show the region.
+
+- [ ] `aws sts get-caller-identity` and `aws configure get region` output
+- [ ] DynamoDB `LumaLensReports` overview: partition key `id`, on-demand capacity
+- [ ] Lambda `lumalens-api` overview, and Configuration → Permissions showing LabRole and the API Gateway resource policy
+- [ ] API Gateway routes attached to the Lambda integration, plus the stage throttling settings
+- [ ] `npm run test:crud` terminal output (full cycle and the 401)
+- [ ] DynamoDB Explore items showing a created item before deletion (`node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt` leaves one item in the table)
+- [ ] CloudWatch log group `/aws/lambda/lumalens-api` with the test requests
+- [ ] (Optional) S3 bucket `lumalens-shots-<NIU>` with Block Public Access on
+- [ ] Learner Lab panel showing the remaining budget
