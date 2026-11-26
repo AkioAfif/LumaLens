@@ -4,8 +4,13 @@ info:
   version: 0.1.0
   description: Engine-agnostic bug-capture API for game builds.
 servers:
+  - url: https://{urlId}.lambda-url.us-east-1.on.aws
+    description: Lambda Function URL (deployed in the AWS Academy sandbox)
+    variables:
+      urlId:
+        default: your-function-url-id
   - url: https://{apiId}.execute-api.us-east-1.amazonaws.com
-    description: API Gateway HTTP API ($default stage)
+    description: API Gateway HTTP API, $default stage (intended where API Gateway is available)
     variables:
       apiId:
         default: your-api-id

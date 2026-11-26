@@ -8,7 +8,7 @@
 <style>
   @page { size: A4; margin: 14mm 15mm; }
   * { box-sizing: border-box; }
-  body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 9.1pt; line-height: 1.33; color: #1d1d1f; margin: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 8.9pt; line-height: 1.3; color: #1d1d1f; margin: 0; }
   h1 { font-size: 17pt; margin: 0 0 1mm; letter-spacing: -0.01em; }
   .meta { color: #5f5f66; font-size: 9pt; margin-bottom: 3mm; }
   h2 { font-size: 11pt; margin: 3.2mm 0 1.2mm; padding-bottom: 0.6mm; border-bottom: 1px solid #d8d8dc; }
@@ -21,7 +21,7 @@
   th { background: #f4f4f6; font-weight: 600; }
   .pitch { background: #eef3fb; border-left: 3px solid #2f6fd1; padding: 1.6mm 2.4mm; margin: 0 0 2mm; }
   figure { margin: 1mm 0 1.5mm; text-align: center; }
-  figure img { width: 56%; }
+  figure img { width: 46%; }
   figcaption { font-size: 8.4pt; color: #5f5f66; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
   .page-break { break-before: page; }
@@ -31,7 +31,7 @@
 <body>
 
 <h1>LumaLens — Design Brief</h1>
-<div class="meta">Cloud Computing · Week 12 · Track C (Serverless) · AWS Learner Lab, us-east-1 · Akio Afif (NIU 542230) ·
+<div class="meta">Cloud Computing · Week 12 · Track C (Serverless) · AWS Academy sandbox, us-east-1 · Akio Afif (NIU 542230) ·
   Repo: <code>github.com/AkioAfif/LumaLens</code></div>
 
 <div class="pitch"><strong>Pitch:</strong> an engine-agnostic HTTP API with a reference Unity client that auto-captures
@@ -57,13 +57,16 @@
 
 <h2>3. Architecture</h2>
 <figure>
-  <img src="architecture.png" alt="LumaLens architecture: clients call API Gateway, which invokes the lumalens-api Lambda, which reads and writes DynamoDB and logs to CloudWatch; S3 is planned.">
+  <img src="architecture.png" alt="LumaLens architecture: clients call the lumalens-api Lambda through its Function URL; the Lambda reads and writes DynamoDB and logs to CloudWatch; S3 is planned.">
 </figure>
 <ul>
-  <li><strong>API Gateway HTTP API</strong> (payload 2.0, Lambda proxy) exposes 5 routes on <code>/bugs</code>. HTTP API was chosen over REST API because it is cheaper and simpler and we need no REST-only features.</li>
+  <li><strong>Lambda Function URL</strong> is the HTTPS endpoint for all <code>/bugs</code> routes. The design targets an <strong>API Gateway HTTP API</strong>
+    (5 routes, stage throttling 10 req/s, burst 20), but the AWS Academy sandbox denies <code>apigateway:POST</code> even for LabRole. Both send the same
+    payload 2.0 event and the handler routes on path and method, so the code is identical behind either; switching back is a console-only change.</li>
   <li><strong>One Lambda, <code>lumalens-api</code></strong> (Node.js 20, TypeScript bundled with esbuild, ~116 KB zip) routes,
     validates with zod, checks the API key and talks to DynamoDB with AWS SDK v3. The SDK comes from the runtime, so it is not bundled.</li>
-  <li><strong>DynamoDB <code>LumaLensReports</code></strong>, partition key <code>id</code>, on-demand capacity: no servers, and we pay per request.</li>
+  <li><strong>DynamoDB <code>LumaLensReports</code></strong>, partition key <code>id</code>, on-demand capacity: no servers, and we pay per request.
+    The sandbox user cannot create tables, so the table comes from a CloudFormation template (<code>infra/dynamodb-table.yaml</code>) run as LabRole.</li>
   <li><strong>CloudWatch Logs</strong> keeps request and error logs. Unexpected errors are logged in full, but clients only see <code>internal_error</code>.</li>
 </ul>
 
@@ -97,14 +100,14 @@
 
 <h2>6. IAM and security</h2>
 <table>
-  <tr><th style="width:20%">Area</th><th style="width:40%">Actual (Learner Lab)</th><th>Intended (production)</th></tr>
-  <tr><td>Lambda role</td><td><strong>LabRole</strong>. Learner Lab cannot create IAM roles, and LabRole is broader than needed.</td>
+  <tr><th style="width:20%">Area</th><th style="width:40%">Actual (AWS Academy sandbox)</th><th>Intended (production)</th></tr>
+  <tr><td>Lambda role</td><td><strong>LabRole</strong>. The sandbox cannot create IAM roles, and LabRole is broader than needed.</td>
       <td>Custom role: <code>dynamodb:PutItem/GetItem/Scan/UpdateItem/DeleteItem</code> on the <code>LumaLensReports</code> ARN only; <code>s3:PutObject</code> on <code>lumalens-shots-542230/screenshots/*</code> and <code>/logs/*</code> only; basic CloudWatch Logs.</td></tr>
-  <tr><td>API GW → Lambda</td><td>Resource-based policy added by the integration</td><td>Same</td></tr>
+  <tr><td>Endpoint → Lambda</td><td>Function URL, auth type NONE; resource policy allows public invoke only via the URL. The API key check in Lambda is the gate.</td><td>API Gateway HTTP API; resource policy added by its Lambda integration</td></tr>
   <tr><td>Client auth</td><td><code>x-lumalens-key</code> header compared in constant time with the <code>LUMALENS_KEY</code> env var. The key ships inside builds and can be extracted.</td>
       <td>Cognito JWT authorizer, or one key per project so that a leaked build can be revoked on its own</td></tr>
   <tr><td>S3 (planned)</td><td>Block Public Access on; uploads only via short-lived presigned URLs (<code>image/png</code>, <code>text/plain</code>)</td><td>Same, plus a lifecycle rule to expire old logs</td></tr>
-  <tr><td>AWS credentials</td><td>Only in <code>~/.aws/credentials</code> locally, refreshed each lab session; never in the repo or a build</td><td>CI secrets</td></tr>
+  <tr><td>AWS credentials</td><td>CloudShell's session credentials; never in the repo or a build</td><td>CI secrets</td></tr>
 </table>
 
 <div class="two">
@@ -112,18 +115,18 @@
 <h2>7. Network</h2>
 <ul>
   <li><strong>No custom VPC, on purpose.</strong> Lambda reaches DynamoDB and S3 over their HTTPS endpoints. A VPC would need a NAT Gateway (hourly cost against a budget that cannot be reset) or VPC endpoints, and would add nothing here.</li>
-  <li><strong>Trust boundary 1</strong>, internet → API Gateway: TLS only, API key checked in Lambda.</li>
+  <li><strong>Trust boundary 1</strong>, internet → Function URL: TLS only, API key checked in Lambda.</li>
   <li><strong>Trust boundary 2</strong>, inside AWS: Lambda → DynamoDB/S3 through IAM-authorized SDK calls.</li>
-  <li><strong>Abuse protection:</strong> stage throttling of 10 req/s, burst 20.</li>
+  <li><strong>Abuse protection:</strong> API key, 10 s Lambda timeout and the account concurrency limit. API Gateway stage throttling (10 req/s, burst 20) is the intended layer once it is available.</li>
   <li><strong>CORS:</strong> not needed for native builds. It will be enabled for the itch.io origins when the WebGL snippet ships.</li>
 </ul>
 </div>
 <div>
 <h2>8. Cost and risks</h2>
 <ul>
-  <li><strong>Cost:</strong> everything is pay-per-request (HTTP API, Lambda, on-demand DynamoDB) and nothing runs while idle. At course scale it stays near zero.</li>
-  <li><strong>IAM role creation blocked:</strong> always pick <em>Use an existing role → LabRole</em>. The least-privilege policy is documented above as the intended design.</li>
-  <li><strong>Embedded key extracted:</strong> throttling now, per-project keys or JWT later.</li>
+  <li><strong>Cost:</strong> everything is pay-per-request (Lambda and its URL, on-demand DynamoDB) and nothing runs while idle. At course scale it stays near zero.</li>
+  <li><strong>Sandbox limits:</strong> no IAM role creation, no API Gateway, no direct table creation, and every resource is deleted when the session ends. Mitigations: LabRole, Function URL, CloudFormation as LabRole, and a scripted deploy that rebuilds everything in minutes.</li>
+  <li><strong>Embedded key extracted:</strong> no throttling on a Function URL; API Gateway throttling, per-project keys or JWT are the production path.</li>
   <li><strong>Stripped shader variants may not raise a log message</strong>, so auto-capture can miss them. The Player.log tail (Week 13+) covers this case.</li>
 </ul>
 </div>
@@ -132,7 +135,8 @@
 <h2>9. Verification</h2>
 <p>Locally, 22 unit tests (vitest + aws-sdk-client-mock) cover auth, validation, every status code and the DynamoDB
   conditions. On AWS, <code>scripts/test-crud.mjs</code> runs 401 → POST 201 → GET 200 → list 200 → PUT 200 → DELETE 204 → GET 404
-  and saves the transcript to <code>docs/evidence/crud-test.txt</code>, next to the console screenshots.</p>
+  and saves the transcript to <code>docs/evidence/crud-test.txt</code>, next to the console screenshots. On 26 Nov 2026 every step passed
+  against the deployed Function URL in us-east-1.</p>
 
 </body>
 </html>

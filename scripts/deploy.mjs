@@ -1,5 +1,6 @@
 // Uploads backend/dist/function.zip to the existing lumalens-api Lambda.
-// Needs the AWS CLI with Learner Lab credentials in ~/.aws/credentials (refresh them each lab session).
+// Needs the AWS CLI with the lab session's credentials in ~/.aws/credentials (refresh them each session),
+// or run the equivalent `aws lambda update-function-code` from CloudShell (see README, Deploy step 5).
 //
 // Usage (PowerShell), from the repo root:
 //   npm --prefix backend run build
