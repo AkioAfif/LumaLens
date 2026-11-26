@@ -6,9 +6,15 @@
 //   npm run test:crud                     # writes docs/evidence/crud-test.txt
 //   node scripts/test-crud.mjs --out <path>
 //   node scripts/test-crud.mjs --keep     # stop before DELETE so the item stays in the table
+//   node scripts/test-crud.mjs --uploads  # also test POST /uploads + presigned S3 PUTs
+//                                         # (or set LUMALENS_TEST_UPLOADS=1)
 //
 // Expected: 401 without key, POST 201, GET 200, GET list 200, PUT 200 (status fixed),
 // DELETE 204, GET 404. Exits with code 1 if any step returns a different status.
+//
+// With --uploads, a second bug is created and: POST /uploads 201 (screenshot and log),
+// S3 PUT 200 for each, PUT /bugs/{id} 200 with screenshotKey/logKey, GET 200 showing both keys.
+// That bug and its two S3 objects are left in place for the evidence screenshots.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +26,7 @@ const outFile = outArg > -1 && process.argv[outArg + 1]
   : join(root, 'docs', 'evidence', 'crud-test.txt');
 
 const keep = process.argv.includes('--keep');
+const uploads = process.argv.includes('--uploads') || process.env.LUMALENS_TEST_UPLOADS === '1';
 const baseUrl = (process.env.LUMALENS_API_URL ?? '').replace(/\/+$/, '');
 const apiKey = process.env.LUMALENS_KEY ?? '';
 if (!baseUrl || !apiKey) {
@@ -35,7 +42,7 @@ const log = (line = '') => {
 
 let failures = 0;
 
-async function step(label, method, path, { body, withKey = true, expect }) {
+async function step(label, method, path, { body, withKey = true, expect, mask = (v) => v }) {
   const headers = { 'content-type': 'application/json' };
   if (withKey) headers['x-lumalens-key'] = apiKey;
   const res = await fetch(`${baseUrl}${path}`, {
@@ -51,15 +58,17 @@ async function step(label, method, path, { body, withKey = true, expect }) {
   log(`> ${method} ${path}${withKey ? '  (x-lumalens-key: ***)' : '  (no x-lumalens-key header)'}`);
   if (body !== undefined) log(`> ${JSON.stringify(body)}`);
   log(`< HTTP ${res.status}  [expected ${expect}: ${pass ? 'PASS' : 'FAIL'}]`);
+  let parsed;
   if (text) {
     try {
-      log(JSON.stringify(JSON.parse(text), null, 2));
+      parsed = JSON.parse(text);
+      log(JSON.stringify(mask(parsed), null, 2));
     } catch {
       log(text);
     }
   }
   log();
-  return text ? JSON.parse(text) : undefined;
+  return parsed;
 }
 
 log('LumaLens CRUD test');
@@ -102,9 +111,94 @@ if (!id) {
   }
 }
 
-log(failures === 0 && id ? 'RESULT: all steps passed' : `RESULT: ${failures} step(s) failed`);
+// 1x1 transparent PNG.
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** PUT a file to a presigned S3 URL. The query string (signature, session token) is never logged. */
+async function s3Put(label, uploadUrl, contentType, data) {
+  const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'content-type': contentType }, body: data });
+  const text = await res.text();
+  const pass = res.status === 200;
+  if (!pass) failures += 1;
+  const u = new URL(uploadUrl);
+  log(`### ${label}`);
+  log(`> PUT ${u.origin}${u.pathname}?<presigned query: ***>`);
+  log(`> Content-Type: ${contentType}, ${data.length} bytes`);
+  log(`< HTTP ${res.status}  [expected 200: ${pass ? 'PASS' : 'FAIL'}]`);
+  if (!pass && text) log(text);
+  log();
+}
+
+/** The API response minus the presigned URL, which carries a temporary credential. */
+const maskTicket = (t) => (t?.uploadUrl ? { ...t, uploadUrl: '<presigned, masked>' } : t);
+
+async function uploadSteps() {
+  log('## Uploads (--uploads)');
+  log();
+  const bug = await step('U1. Create bug report for uploads', 'POST', '/bugs', {
+    expect: 201,
+    body: {
+      title: 'Upload test: screenshot and log attached',
+      severity: 'low',
+      engine: 'unity',
+      runContext: 'build',
+      buildVersion: '0.3.1',
+      platform: 'windows',
+    },
+  });
+  const bugId = bug?.id;
+  if (!bugId) {
+    log('Create did not return an id; skipping upload steps.');
+    return false;
+  }
+
+  const shot = await step('U2. Presign screenshot upload', 'POST', '/uploads', {
+    expect: 201,
+    body: { bugId, kind: 'screenshot' },
+    mask: maskTicket,
+  });
+  const logT = await step('U3. Presign log upload', 'POST', '/uploads', {
+    expect: 201,
+    body: { bugId, kind: 'log' },
+    mask: maskTicket,
+  });
+  if (!shot?.uploadUrl || !logT?.uploadUrl) {
+    log('Presign failed; skipping S3 PUTs.');
+    return false;
+  }
+
+  await s3Put('U4. PUT screenshot to S3', shot.uploadUrl, shot.contentType, PNG_1PX);
+  await s3Put(
+    'U5. PUT log to S3',
+    logT.uploadUrl,
+    logT.contentType,
+    Buffer.from(`LumaLens upload test ${new Date().toISOString()}
+`, 'utf8'),
+  );
+
+  await step('U6. Attach the keys to the report', 'PUT', `/bugs/${bugId}`, {
+    expect: 200,
+    body: { screenshotKey: shot.key, logKey: logT.key },
+  });
+  const after = await step('U7. Get the report with its keys', 'GET', `/bugs/${bugId}`, { expect: 200 });
+  const keysOk = after?.screenshotKey === shot.key && after?.logKey === logT.key;
+  if (!keysOk) failures += 1;
+  log(`Keys stored on the report: ${keysOk ? 'PASS' : 'FAIL'} (${shot.key}, ${logT.key})`);
+  log(`Bug ${bugId} and both S3 objects were left in place for the evidence screenshots.`);
+  log();
+  return true;
+}
+
+let uploadsOk = true;
+if (uploads) uploadsOk = await uploadSteps();
+
+const allOk = failures === 0 && id && uploadsOk;
+log(allOk ? 'RESULT: all steps passed' : `RESULT: ${failures} step(s) failed`);
 
 await mkdir(dirname(outFile), { recursive: true });
 await writeFile(outFile, `${lines.join('\n')}\n`, 'utf8');
 console.log(`\nSaved transcript to ${outFile}`);
-process.exit(failures === 0 && id ? 0 : 1);
+process.exit(allOk ? 0 : 1);

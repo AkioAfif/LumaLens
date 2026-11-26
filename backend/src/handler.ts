@@ -1,5 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   DeleteCommand,
   DynamoDBDocumentClient,
@@ -20,7 +22,13 @@ import {
   unauthorized,
   type HttpResponse,
 } from './http.js';
-import { BugReportCreate, BugReportUpdate, ListQuery } from './validation.js';
+import {
+  BugReportCreate,
+  BugReportUpdate,
+  ListQuery,
+  UploadRequest,
+  type UploadKind,
+} from './validation.js';
 
 /** Minimal subset of the payload v2.0 event (sent by both Lambda Function URLs and API Gateway HTTP APIs) that we use. */
 export interface HttpApiEvent {
@@ -34,9 +42,21 @@ export interface HttpApiEvent {
 
 const LIST_CAP = 500;
 
+/** Lifetime of a presigned upload URL, in seconds. */
+export const UPLOAD_URL_TTL = 300;
+
+const UPLOAD_TARGETS: Record<UploadKind, { prefix: string; ext: string; contentType: string }> = {
+  screenshot: { prefix: 'screenshots/', ext: '.png', contentType: 'image/png' },
+  log: { prefix: 'logs/', ext: '.txt', contentType: 'text/plain' },
+};
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
+
+// WHEN_REQUIRED: by default the SDK adds a CRC32 checksum of the (empty) request body to
+// presigned PutObject URLs, so S3 would reject the client's real upload with BadDigest.
+const s3 = new S3Client({ requestChecksumCalculation: 'WHEN_REQUIRED' });
 
 const tableName = (): string => {
   const name = process.env.TABLE_NAME;
@@ -189,6 +209,37 @@ async function deleteBug(id: string): Promise<HttpResponse> {
   }
 }
 
+// ---- Uploads -------------------------------------------------------------
+
+/**
+ * Presigns a PutObject URL for a bug's screenshot or log. The client PUTs the file straight
+ * to S3 with the returned Content-Type, then stores `key` on the report via PUT /bugs/{id}.
+ */
+async function createUpload({ bugId, kind }: UploadRequest): Promise<HttpResponse> {
+  const bucket = process.env.BUCKET_NAME;
+  if (!bucket) {
+    console.error('BUCKET_NAME env var is not set; cannot presign uploads');
+    return internalError();
+  }
+
+  const res = await ddb.send(new GetCommand({
+    TableName: tableName(),
+    Key: { id: bugId },
+    ProjectionExpression: 'id',
+  }));
+  if (!res.Item) return notFound();
+
+  const { prefix, ext, contentType } = UPLOAD_TARGETS[kind];
+  const key = `${prefix}${bugId}${ext}`;
+  const uploadUrl = await getSignedUrl(
+    s3,
+    new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
+    // Sign Content-Type as a header (not a hoisted query param): a PUT with any other type fails.
+    { expiresIn: UPLOAD_URL_TTL, signableHeaders: new Set(['content-type']) },
+  );
+  return created({ uploadUrl, key, contentType, expiresIn: UPLOAD_URL_TTL });
+}
+
 // ---- Router --------------------------------------------------------------
 
 async function route(event: HttpApiEvent): Promise<HttpResponse> {
@@ -201,6 +252,11 @@ async function route(event: HttpApiEvent): Promise<HttpResponse> {
       const q = event.queryStringParameters ?? {};
       return listBugs(validate(ListQuery, { status: q.status, buildVersion: q.buildVersion }));
     }
+    return notFound();
+  }
+
+  if (path === '/uploads') {
+    if (method === 'POST') return createUpload(validate(UploadRequest, parseBody(event)));
     return notFound();
   }
 

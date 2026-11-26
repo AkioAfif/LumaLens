@@ -48,10 +48,18 @@ const conditionalFailed = () =>
 
 const parse = (body: string | undefined) => JSON.parse(body ?? '');
 
+const BUCKET = 'lumalens-shots-542230';
+
 beforeEach(() => {
   ddbMock.reset();
   process.env.LUMALENS_KEY = KEY;
   process.env.TABLE_NAME = 'LumaLensReports';
+  process.env.BUCKET_NAME = BUCKET;
+  // Presigning is done locally (no S3 call), but the signer needs a region and some credentials.
+  process.env.AWS_REGION = 'us-east-1';
+  process.env.AWS_ACCESS_KEY_ID = 'AKIATESTTESTTESTTEST';
+  process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+  delete process.env.AWS_SESSION_TOKEN;
 });
 
 afterEach(() => {
@@ -209,6 +217,108 @@ describe('PUT /bugs/{id}', () => {
   it('404 when missing', async () => {
     ddbMock.on(UpdateCommand).rejects(conditionalFailed());
     const res = await handler(event('PUT', `/bugs/${ID}`, { body: { severity: 'crash' } }));
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('200 setting screenshotKey and logKey alone', async () => {
+    const keys = { screenshotKey: `screenshots/${ID}.png`, logKey: `logs/${ID}.txt` };
+    ddbMock.on(UpdateCommand).resolves({ Attributes: { id: ID, ...keys } });
+    const res = await handler(event('PUT', `/bugs/${ID}`, { body: keys }));
+    expect(res.statusCode).toBe(200);
+    expect(parse(res.body)).toMatchObject(keys);
+
+    const input = ddbMock.commandCalls(UpdateCommand)[0]!.args[0].input;
+    expect(input.UpdateExpression).toBe(
+      'SET #screenshotKey = :screenshotKey, #logKey = :logKey, #updatedAt = :updatedAt',
+    );
+    expect(input.ExpressionAttributeValues).toMatchObject({
+      ':screenshotKey': keys.screenshotKey,
+      ':logKey': keys.logKey,
+    });
+  });
+
+  it.each([
+    ['screenshotKey outside screenshots/', { screenshotKey: `logs/${ID}.txt` }],
+    ['logKey outside logs/', { logKey: `../${ID}.txt` }],
+    ['screenshotKey over 200 chars', { screenshotKey: `screenshots/${'x'.repeat(190)}` }],
+    ['non-string logKey', { logKey: 42 }],
+  ])('400 validation_failed on %s', async (_label, body) => {
+    const res = await handler(event('PUT', `/bugs/${ID}`, { body }));
+    expect(res.statusCode).toBe(400);
+    expect(parse(res.body).error).toBe('validation_failed');
+    expect(ddbMock.calls()).toHaveLength(0);
+  });
+});
+
+describe('POST /uploads', () => {
+  it('401 without x-lumalens-key', async () => {
+    const res = await handler(event('POST', '/uploads', { key: null, body: { bugId: ID, kind: 'screenshot' } }));
+    expect(res.statusCode).toBe(401);
+    expect(ddbMock.calls()).toHaveLength(0);
+  });
+
+  it.each([
+    ['missing kind', { bugId: ID }],
+    ['bad kind', { bugId: ID, kind: 'video' }],
+    ['non-uuid bugId', { bugId: '../etc/passwd', kind: 'log' }],
+    ['unknown field', { bugId: ID, kind: 'log', key: 'logs/evil.txt' }],
+  ])('400 validation_failed on %s', async (_label, body) => {
+    const res = await handler(event('POST', '/uploads', { body }));
+    expect(res.statusCode).toBe(400);
+    expect(parse(res.body).error).toBe('validation_failed');
+    expect(ddbMock.calls()).toHaveLength(0);
+  });
+
+  it('400 invalid_json on malformed body', async () => {
+    const res = await handler(event('POST', '/uploads', { rawBody: '{' }));
+    expect(res.statusCode).toBe(400);
+    expect(parse(res.body)).toEqual({ error: 'invalid_json' });
+  });
+
+  it('404 not_found when the bug does not exist', async () => {
+    ddbMock.on(GetCommand).resolves({});
+    const res = await handler(event('POST', '/uploads', { body: { bugId: ID, kind: 'screenshot' } }));
+    expect(res.statusCode).toBe(404);
+    expect(parse(res.body)).toEqual({ error: 'not_found' });
+    expect(ddbMock.commandCalls(GetCommand)[0]!.args[0].input.Key).toEqual({ id: ID });
+  });
+
+  it.each([
+    ['screenshot', `screenshots/${ID}.png`, 'image/png'],
+    ['log', `logs/${ID}.txt`, 'text/plain'],
+  ])('201 with a presigned PUT URL for a %s', async (kind, key, contentType) => {
+    ddbMock.on(GetCommand).resolves({ Item: { id: ID } });
+    const res = await handler(event('POST', '/uploads', { body: { bugId: ID, kind } }));
+    expect(res.statusCode).toBe(201);
+    const body = parse(res.body);
+    expect(body).toMatchObject({ key, contentType, expiresIn: 300 });
+    expect(Object.keys(body).sort()).toEqual(['contentType', 'expiresIn', 'key', 'uploadUrl']);
+
+    const url = new URL(body.uploadUrl);
+    expect(url.protocol).toBe('https:');
+    expect(url.hostname).toContain(BUCKET);
+    expect(url.pathname).toContain(key);
+    expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
+    expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
+    expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+    // Content-Type is a signed header, so a PUT with any other type is rejected by S3.
+    expect(url.searchParams.get('X-Amz-SignedHeaders')?.split(';')).toContain('content-type');
+    // No precomputed body checksum (it would be the empty-body CRC32 and break the real PUT).
+    expect([...url.searchParams.keys()].some((k) => k.toLowerCase().startsWith('x-amz-checksum'))).toBe(false);
+  });
+
+  it('500 internal_error and logs when BUCKET_NAME is missing', async () => {
+    delete process.env.BUCKET_NAME;
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    ddbMock.on(GetCommand).resolves({ Item: { id: ID } });
+    const res = await handler(event('POST', '/uploads', { body: { bugId: ID, kind: 'log' } }));
+    expect(res.statusCode).toBe(500);
+    expect(parse(res.body)).toEqual({ error: 'internal_error' });
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('BUCKET_NAME'));
+  });
+
+  it('404 on GET /uploads', async () => {
+    const res = await handler(event('GET', '/uploads'));
     expect(res.statusCode).toBe(404);
   });
 });
