@@ -250,3 +250,4 @@ Captured on 26 Nov 2026, each screenshot showing us-east-1. The files live in `d
 | `18-cloudformation-bucket-outputs.jpg` | `lumalens-bucket` Outputs: `BucketName` |
 | `19-s3-object-screenshot.jpg`, `20-s3-object-log.jpg` | Objects uploaded via presigned PUT: `screenshots/<id>.png`, `logs/<id>.txt` |
 | `21-uploads-test-terminal.jpg` | `test-crud.mjs --uploads`: all steps passed |
+| `uploads-test.txt` | Full `--uploads` transcript (key and presigned query strings masked): every step passed |
