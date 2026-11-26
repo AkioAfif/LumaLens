@@ -1,0 +1,126 @@
+# Source for docs/architecture.png (AWS Diagram-as-Code: https://github.com/awslabs/diagram-as-code)
+# Regenerate: awsdac docs/architecture.dac.yaml -o docs/architecture.png
+# Solid links exist today; dashed links are planned.
+Diagram:
+  DefinitionFiles:
+    - Type: URL
+      Url: "https://raw.githubusercontent.com/awslabs/diagram-as-code/main/definitions/definition-for-aws-icons-light.yaml"
+  Resources:
+    Canvas:
+      Type: AWS::Diagram::Canvas
+      Direction: vertical
+      Children:
+        - Clients
+        - AWSCloud
+    Clients:
+      Type: AWS::Diagram::HorizontalStack
+      Children:
+        - TestClient
+        - WebGLClient
+        - UnityClient
+    TestClient:
+      Type: AWS::Diagram::Resource
+      Preset: User
+      Title: "curl / test-crud script"
+    WebGLClient:
+      Type: AWS::Diagram::Resource
+      Preset: User
+      Title: "WebGL loader (planned)"
+    UnityClient:
+      Type: AWS::Diagram::Resource
+      Preset: User
+      Title: "Unity client (planned)"
+    AWSCloud:
+      Type: AWS::Diagram::Cloud
+      Direction: vertical
+      Preset: AWSCloudNoLogo
+      Title: "AWS Learner Lab - no custom VPC"
+      Children:
+        - Region
+    Region:
+      Type: AWS::Region
+      Title: "us-east-1"
+      Direction: vertical
+      Children:
+        - ApiGateway
+        - Lambda
+        - Backends
+    ApiGateway:
+      Type: AWS::ApiGateway::RestApi
+      Title: "API Gateway HTTP API"
+    Lambda:
+      Type: AWS::Lambda::Function
+      Title: "Lambda lumalens-api"
+    Backends:
+      Type: AWS::Diagram::HorizontalStack
+      Children:
+        - Table
+        - Logs
+        - Bucket
+    Table:
+      Type: AWS::DynamoDB::Table
+      Title: "DynamoDB LumaLensReports"
+    Logs:
+      Type: AWS::Logs::LogGroup
+      Title: "CloudWatch Logs"
+    Bucket:
+      Type: AWS::S3::Bucket
+      Title: "S3 lumalens-shots (planned)"
+  Links:
+    - Source: TestClient
+      SourcePosition: S
+      Target: ApiGateway
+      TargetPosition: W
+      Type: orthogonal
+      TargetArrowHead:
+        Type: Open
+    - Source: WebGLClient
+      SourcePosition: S
+      Target: ApiGateway
+      TargetPosition: N
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
+    - Source: UnityClient
+      SourcePosition: S
+      Target: ApiGateway
+      TargetPosition: E
+      Type: orthogonal
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
+    - Source: UnityClient
+      SourcePosition: E
+      Target: Bucket
+      TargetPosition: E
+      Type: orthogonal
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open
+    - Source: ApiGateway
+      SourcePosition: S
+      Target: Lambda
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+    - Source: Lambda
+      SourcePosition: W
+      Target: Table
+      TargetPosition: N
+      Type: orthogonal
+      TargetArrowHead:
+        Type: Open
+    - Source: Lambda
+      SourcePosition: S
+      Target: Logs
+      TargetPosition: N
+      TargetArrowHead:
+        Type: Open
+    - Source: Lambda
+      SourcePosition: E
+      Target: Bucket
+      TargetPosition: N
+      Type: orthogonal
+      LineStyle: dashed
+      TargetArrowHead:
+        Type: Open

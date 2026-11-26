@@ -2,6 +2,8 @@
 
 ![LumaLens architecture](architecture.png)
 
+The PNG is generated with [AWS Diagram-as-Code](https://github.com/awslabs/diagram-as-code) from [`architecture.dac.yaml`](architecture.dac.yaml). Edit the YAML and run `awsdac architecture.dac.yaml -o architecture.png` (from `docs/`) to regenerate it.
+
 ```mermaid
 flowchart LR
     subgraph Clients
