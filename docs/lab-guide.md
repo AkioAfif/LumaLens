@@ -277,8 +277,8 @@ This is the second quick check. If **U4/U5 return 403**:
 - [x] CloudWatch log group and log events
 - [ ] `npm run test:crud` terminal output
 - [x] DynamoDB Explore items with the kept item, and the item detail
-- [ ] S3 bucket `lumalens-shots-542230` overview
-- [ ] S3 Block Public Access (all four on)
-- [ ] CloudFormation stack `lumalens-bucket` CREATE_COMPLETE + Outputs (or the console fallback's lifecycle rule)
-- [ ] S3 objects under `screenshots/` and `logs/` after the upload test
-- [ ] Upload test terminal output
+- [x] S3 bucket `lumalens-shots-542230` overview
+- [x] S3 Block Public Access (all four on)
+- [x] CloudFormation stack `lumalens-bucket` CREATE_COMPLETE + Outputs (or the console fallback's lifecycle rule)
+- [x] S3 objects under `screenshots/` and `logs/` after the upload test
+- [x] Upload test terminal output

@@ -242,3 +242,11 @@ Captured on 26 Nov 2026, each screenshot showing us-east-1. The files live in `d
 | `11-dynamodb-explore-items.jpg` | Table scan with the item kept by `--keep` |
 | `12-dynamodb-item-detail.jpg` | All attributes of that item |
 | `crud-test.txt`, `crud-keep.txt` | Full CRUD transcripts (key masked): every step passed |
+| `13-s3-bucket-overview.jpg` | Week 13: bucket `lumalens-shots-542230`, us-east-1 |
+| `14-s3-default-encryption.jpg` | Default encryption SSE-S3 |
+| `15-s3-block-public-access.jpg` | Block all public access On, all four settings |
+| `16-s3-lifecycle-rules.jpg` | Lifecycle rules `expire-logs` and `abort-incomplete-uploads`, enabled |
+| `17-cloudformation-stacks.jpg` | Stacks `lumalens-bucket` and `lumalens-table`, CREATE_COMPLETE |
+| `18-cloudformation-bucket-outputs.jpg` | `lumalens-bucket` Outputs: `BucketName` |
+| `19-s3-object-screenshot.jpg`, `20-s3-object-log.jpg` | Objects uploaded via presigned PUT: `screenshots/<id>.png`, `logs/<id>.txt` |
+| `21-uploads-test-terminal.jpg` | `test-crud.mjs --uploads`: all steps passed |
