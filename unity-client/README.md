@@ -59,7 +59,7 @@ BugReporter.Report("Buildings not see-through", Severity.High, "Roof stays opaqu
 - **The API key ships inside the build** and can be extracted. It filters casual spam; it is not a secret. Per-project keys or a JWT authorizer are the production path (see the design brief).
 - **WebGL builds** call the API from the browser, so the Function URL needs CORS for the itch.io origin first (Week 14).
 - iOS and other platforms the API has no value for are skipped with a warning.
-- Not yet: screenshots and Player.log tail upload (needs the `upload-url` route and an S3 bucket), and an offline retry queue.
+- Not yet: screenshots and Player.log tail upload. The backend side exists (`POST /uploads` presigns an S3 PUT, then `PUT /bugs/{id}` stores `screenshotKey` / `logKey`); the client does not call it yet. No offline retry queue either.
 
 ## Demo
 

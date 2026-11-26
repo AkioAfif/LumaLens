@@ -19,6 +19,8 @@ security:
 tags:
   - name: bugs
     description: Bug report CRUD
+  - name: uploads
+    description: Presigned S3 upload URLs for screenshots and logs
 paths:
   /bugs:
     post:
@@ -84,6 +86,39 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalError'
+  /uploads:
+    post:
+      tags: [uploads]
+      operationId: createUpload
+      summary: Get a presigned S3 PUT URL for a bug's screenshot or log
+      description: |
+        Returns a presigned PutObject URL for `screenshots/<bugId>.png` (`image/png`) or
+        `logs/<bugId>.txt` (`text/plain`), valid for `expiresIn` seconds. Upload with
+        `PUT <uploadUrl>` and the exact `Content-Type` returned (no `x-lumalens-key`; S3 expects 200).
+        This route does not change the report: store the key afterwards with
+        `PUT /bugs/{id}` (`screenshotKey` / `logKey`). Requesting the same kind twice
+        returns a URL for the same key, so a new upload overwrites the old object.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+      responses:
+        '201':
+          description: Presigned upload URL created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadTicket'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /bugs/{id}:
     parameters:
       - name: id
@@ -112,7 +147,7 @@ paths:
     put:
       tags: [bugs]
       operationId: updateBug
-      summary: Update status, severity or description
+      summary: Update status, severity, description, or the S3 keys
       requestBody:
         required: true
         content:
@@ -254,7 +289,7 @@ components:
       type: object
       additionalProperties: false
       minProperties: 1
-      description: At least one of status, severity, description.
+      description: At least one of status, severity, description, screenshotKey, logKey.
       properties:
         status:
           $ref: '#/components/schemas/Status'
@@ -263,6 +298,49 @@ components:
         description:
           type: string
           maxLength: 2000
+        screenshotKey:
+          type: string
+          maxLength: 200
+          pattern: '^screenshots/'
+          description: S3 key from POST /uploads (kind `screenshot`)
+          example: screenshots/11111111-2222-4333-8444-555555555555.png
+        logKey:
+          type: string
+          maxLength: 200
+          pattern: '^logs/'
+          description: S3 key from POST /uploads (kind `log`)
+          example: logs/11111111-2222-4333-8444-555555555555.txt
+    UploadRequest:
+      type: object
+      additionalProperties: false
+      required: [bugId, kind]
+      properties:
+        bugId:
+          type: string
+          format: uuid
+          description: id of an existing bug report
+        kind:
+          type: string
+          enum: [screenshot, log]
+    UploadTicket:
+      type: object
+      required: [uploadUrl, key, contentType, expiresIn]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned S3 PutObject URL
+        key:
+          type: string
+          example: screenshots/11111111-2222-4333-8444-555555555555.png
+        contentType:
+          type: string
+          enum: [image/png, text/plain]
+          description: Send exactly this Content-Type with the PUT; it is part of the signature
+        expiresIn:
+          type: integer
+          description: Seconds until uploadUrl expires
+          example: 300
     BugReport:
       type: object
       required:
