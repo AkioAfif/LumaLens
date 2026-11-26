@@ -42,7 +42,7 @@ The intended front door is an **API Gateway HTTP API** (payload format 2.0, 6 ro
 
 Both deliver the same payload format 2.0 event, and the handler routes on `rawPath` and `requestContext.http.method`, so the code is identical behind either. Swapping back to API Gateway is a console-only change.
 
-The sandbox user also can't call `dynamodb:CreateTable`. CloudFormation running as LabRole can, so the table comes from [`infra/dynamodb-table.yaml`](../infra/dynamodb-table.yaml), deployed as stack `lumalens-table`. The bucket comes from [`infra/s3-bucket.yaml`](../infra/s3-bucket.yaml), deployed the same way as stack `lumalens-bucket` (not yet verified in the sandbox; the lab guide has a console fallback).
+The sandbox user also can't call `dynamodb:CreateTable`. CloudFormation running as LabRole can, so the table comes from [`infra/dynamodb-table.yaml`](../infra/dynamodb-table.yaml), deployed as stack `lumalens-table`. The bucket comes from [`infra/s3-bucket.yaml`](../infra/s3-bucket.yaml), deployed the same way as stack `lumalens-bucket` (verified in the sandbox on 26 Nov 2026).
 
 ## Request / data flow
 

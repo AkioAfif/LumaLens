@@ -174,7 +174,7 @@ Transcripts are saved to `docs/evidence/` (git-ignored), with the key masked.
 
 ### 5. S3 bucket and uploads (Week 13)
 
-> **Unverified in the sandbox:** whether LabRole can create the bucket through CloudFormation, and whether S3 accepts PUTs to URLs presigned with LabRole's credentials. Run the quick check in [docs/lab-guide.md, Step 5](docs/lab-guide.md#step-5--s3-bucket-and-uploads-week-13-10-min) first; it has the console fallback.
+> **Verified in the sandbox on 26 Nov 2026:** LabRole can create the bucket through CloudFormation, and S3 accepts PUTs to URLs presigned with LabRole's credentials (`--uploads` test: all steps passed). If a later session behaves differently, [docs/lab-guide.md, Step 5](docs/lab-guide.md#step-5--s3-bucket-and-uploads-week-13-10-min) has a console fallback.
 
 In CloudShell, in the cloned repo (with `$R` from step 1):
 

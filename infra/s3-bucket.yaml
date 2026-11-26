@@ -9,8 +9,8 @@
 #     --template-body file://infra/s3-bucket.yaml --role-arn $R
 #   aws cloudformation wait stack-create-complete --stack-name lumalens-bucket
 #
-# Unverified in the AWS Academy sandbox: whether LabRole may create buckets through CloudFormation.
-# Fallback: create the bucket in the S3 console with the same settings (see docs/lab-guide.md, Step 5).
+# Verified in the AWS Academy sandbox on 26 Nov 2026: CloudFormation as LabRole creates this bucket.
+# Fallback if that ever changes: create it in the S3 console with the same settings (docs/lab-guide.md, Step 5).
 AWSTemplateFormatVersion: "2010-09-09"
 Description: LumaLens screenshot and log bucket (private, SSE-S3, logs/ expire after 30 days)
 Resources:

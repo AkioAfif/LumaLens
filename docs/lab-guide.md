@@ -5,7 +5,7 @@ Step-by-step walkthrough for deploying LumaLens in the **AWS Academy Cloud Found
 Screenshots marked **📸** go in `docs/evidence/`. Each one should show the region (top-right of the console).
 
 > **What the sandbox allows.** Tested on 26 Nov 2026:
-> - Lambda (as LabRole), Lambda Function URLs, S3, CloudWatch and CloudFormation work. Creating the bucket **via CloudFormation** and presigned PUTs are **not verified yet** (see Step 5).
+> - Lambda (as LabRole), Lambda Function URLs, S3, CloudWatch and CloudFormation work. Creating the bucket **via CloudFormation as LabRole** and **presigned PUTs signed by LabRole** both work (verified 26 Nov 2026, see Step 5).
 > - **API Gateway is denied**, even for LabRole. That's why the API is exposed through a Function URL.
 > - **`dynamodb:CreateTable` is denied** for the sandbox user. CloudFormation running as LabRole can create the table.
 > - IAM roles can't be created. Use the existing **LabRole**.
@@ -165,11 +165,11 @@ node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt
 
 Adds the screenshot/log bucket `lumalens-shots-542230` and the `POST /uploads` route. Do it in the same session as steps 1–4 (or redo them first: the sandbox wipes everything at the end of a session).
 
-> ⚠️ **Sandbox risk: not verified yet.** Two things haven't been tried in this sandbox:
-> 1. whether **CloudFormation as LabRole can create an S3 bucket** (it can create the table, but bucket permissions may differ), and
-> 2. whether **S3 accepts a PUT to a URL presigned with LabRole's credentials** (the URL is signed with the Lambda's temporary LabRole session, so a sandbox policy or an SCP on S3 could still reject it).
+> ✅ **Sandbox risks: verified on 26 Nov 2026.** Two things were unknown before Week 13 and both work:
+> 1. **CloudFormation as LabRole can create the S3 bucket** (`lumalens-bucket` CREATE_COMPLETE; Block Public Access, SSE-S3, lifecycle and CORS all applied as in the template), and
+> 2. **S3 accepts PUTs to URLs presigned by the Lambda's LabRole session** (`--uploads` test: both S3 PUTs 200, objects stored as `image/png` / `text/plain`, AES256).
 >
-> So **5.1 is a quick check** before you spend time on screenshots. If it fails, use the fallback next to it.
+> 5.1 is still a quick check, since sandbox policies can change. If it fails, use the fallback next to it.
 
 **5.1 Quick check: create the bucket stack**
 
