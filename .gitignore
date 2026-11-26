@@ -159,3 +159,6 @@ vite.config.ts.timestamp-*
 # LumaLens build output
 dist/
 *.zip
+
+# AWS evidence screenshots (contain account details); kept locally and in the submission zip only
+docs/evidence/

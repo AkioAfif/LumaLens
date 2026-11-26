@@ -79,7 +79,7 @@ npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4
 npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 5)
 ```
 
-Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation template for the table), `docs/` (architecture, OpenAPI, design brief, lab guide, evidence), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
+Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation template for the table), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
 
 ## Deploy (AWS Academy sandbox)
 
@@ -152,7 +152,7 @@ npm run test:crud    # 401 without key, POST 201, GET 200, list 200, PUT 200, DE
 node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt   # same, but leaves one item
 ```
 
-Transcripts are saved to `docs/evidence/`, with the key masked.
+Transcripts are saved to `docs/evidence/` (git-ignored), with the key masked.
 
 ### 5. Redeploying code changes
 
@@ -177,7 +177,7 @@ The handler needs no changes; point `LUMALENS_API_URL` at the HTTP API's invoke 
 
 ### Evidence
 
-Captured on 26 Nov 2026 in `docs/evidence/`, each screenshot showing us-east-1:
+Captured on 26 Nov 2026, each screenshot showing us-east-1. The files live in `docs/evidence/` locally and in the course submission; the folder is git-ignored because the screenshots show account details.
 
 | File | Shows |
 |---|---|
