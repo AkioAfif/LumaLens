@@ -1,6 +1,7 @@
 # Source for docs/architecture.png (AWS Diagram-as-Code: https://github.com/awslabs/diagram-as-code)
 # Regenerate: awsdac docs/architecture.dac.yaml -o docs/architecture.png
 # Solid links exist today; dashed links are planned.
+# Deployed in the AWS Academy sandbox, which blocks API Gateway: clients reach the Lambda through its Function URL.
 Diagram:
   DefinitionFiles:
     - Type: URL
@@ -34,7 +35,7 @@ Diagram:
       Type: AWS::Diagram::Cloud
       Direction: vertical
       Preset: AWSCloudNoLogo
-      Title: "AWS Learner Lab - no custom VPC"
+      Title: "AWS Academy sandbox - no custom VPC"
       Children:
         - Region
     Region:
@@ -42,15 +43,11 @@ Diagram:
       Title: "us-east-1"
       Direction: vertical
       Children:
-        - ApiGateway
         - Lambda
         - Backends
-    ApiGateway:
-      Type: AWS::ApiGateway::RestApi
-      Title: "API Gateway HTTP API"
     Lambda:
       Type: AWS::Lambda::Function
-      Title: "Lambda lumalens-api"
+      Title: "Lambda lumalens-api + Function URL"
     Backends:
       Type: AWS::Diagram::HorizontalStack
       Children:
@@ -69,21 +66,21 @@ Diagram:
   Links:
     - Source: TestClient
       SourcePosition: S
-      Target: ApiGateway
+      Target: Lambda
       TargetPosition: W
       Type: orthogonal
       TargetArrowHead:
         Type: Open
     - Source: WebGLClient
       SourcePosition: S
-      Target: ApiGateway
+      Target: Lambda
       TargetPosition: N
       LineStyle: dashed
       TargetArrowHead:
         Type: Open
     - Source: UnityClient
       SourcePosition: S
-      Target: ApiGateway
+      Target: Lambda
       TargetPosition: E
       Type: orthogonal
       LineStyle: dashed
@@ -95,12 +92,6 @@ Diagram:
       TargetPosition: E
       Type: orthogonal
       LineStyle: dashed
-      TargetArrowHead:
-        Type: Open
-    - Source: ApiGateway
-      SourcePosition: S
-      Target: Lambda
-      TargetPosition: N
       TargetArrowHead:
         Type: Open
     - Source: Lambda

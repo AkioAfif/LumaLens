@@ -1,0 +1,24 @@
+# DynamoDB table for LumaLens.
+# The AWS Academy sandbox user cannot call dynamodb:CreateTable directly, but CloudFormation
+# can create the table when it runs as LabRole (--role-arn). Deploy from CloudShell:
+#
+#   R=$(aws iam get-role --role-name LabRole --query Role.Arn --output text)
+#   aws cloudformation create-stack --stack-name lumalens-table \
+#     --template-body file://infra/dynamodb-table.yaml --role-arn $R
+AWSTemplateFormatVersion: "2010-09-09"
+Description: LumaLens bug report table (partition key id, on-demand)
+Resources:
+  LumaLensReports:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: LumaLensReports
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+Outputs:
+  TableName:
+    Value: !Ref LumaLensReports

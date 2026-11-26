@@ -1,7 +1,7 @@
 // Runs the full CRUD cycle against the deployed API and saves the transcript as evidence.
 //
 // Usage (PowerShell):
-//   $env:LUMALENS_API_URL = "https://<api-id>.execute-api.us-east-1.amazonaws.com"
+//   $env:LUMALENS_API_URL = "https://<url-id>.lambda-url.us-east-1.on.aws"   (or an API Gateway invoke URL)
 //   $env:LUMALENS_KEY = "<the key set on the Lambda>"
 //   npm run test:crud                     # writes docs/evidence/crud-test.txt
 //   node scripts/test-crud.mjs --out <path>

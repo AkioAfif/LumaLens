@@ -22,7 +22,7 @@ import {
 } from './http.js';
 import { BugReportCreate, BugReportUpdate, ListQuery } from './validation.js';
 
-/** Minimal subset of the API Gateway HTTP API payload v2.0 event that we use. */
+/** Minimal subset of the payload v2.0 event (sent by both Lambda Function URLs and API Gateway HTTP APIs) that we use. */
 export interface HttpApiEvent {
   rawPath?: string;
   headers?: Record<string, string | undefined>;
