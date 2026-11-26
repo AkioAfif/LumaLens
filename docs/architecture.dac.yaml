@@ -1,6 +1,7 @@
 # Source for docs/architecture.png (AWS Diagram-as-Code: https://github.com/awslabs/diagram-as-code)
 # Regenerate: awsdac docs/architecture.dac.yaml -o docs/architecture.png
-# Solid links exist today; dashed links are planned.
+# Solid links exist today; dashed links are planned (Unity client, WebGL snippet).
+# The test script's direct PUT to S3 is left out here to keep the PNG readable (see the mermaid diagram).
 # Deployed in the AWS Academy sandbox, which blocks API Gateway: clients reach the Lambda through its Function URL.
 Diagram:
   DefinitionFiles:
@@ -62,7 +63,7 @@ Diagram:
       Title: "CloudWatch Logs"
     Bucket:
       Type: AWS::S3::Bucket
-      Title: "S3 lumalens-shots (planned)"
+      Title: "S3 lumalens-shots-542230"
   Links:
     - Source: TestClient
       SourcePosition: S
@@ -112,6 +113,5 @@ Diagram:
       Target: Bucket
       TargetPosition: N
       Type: orthogonal
-      LineStyle: dashed
       TargetArrowHead:
         Type: Open

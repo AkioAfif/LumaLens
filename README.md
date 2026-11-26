@@ -11,15 +11,16 @@ More detail: [docs/architecture.md](docs/architecture.md) · API contract: [docs
 - **Lambda Function URL** (HTTPS endpoint, auth type `NONE`, payload format 2.0), `us-east-1`
 - **AWS Lambda** `lumalens-api`: Node.js 20, TypeScript bundled with esbuild, handler `index.handler`, runs as the lab's `LabRole`
 - **DynamoDB** table `LumaLensReports` (partition key `id`, on-demand), created with CloudFormation ([`infra/dynamodb-table.yaml`](infra/dynamodb-table.yaml))
+- **S3** bucket `lumalens-shots-542230` for screenshots and logs (private, SSE-S3, `logs/` expire after 30 days), created with CloudFormation ([`infra/s3-bucket.yaml`](infra/s3-bucket.yaml)). Clients upload straight to S3 with a presigned PUT URL from `POST /uploads`
 - **CloudWatch Logs** for request and error logs
-- **zod** for validation, **AWS SDK v3** (`@aws-sdk/lib-dynamodb`) for data access, **vitest** + **aws-sdk-client-mock** for tests
+- **zod** for validation, **AWS SDK v3** (`@aws-sdk/lib-dynamodb`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, all bundled into the zip) for data access, **vitest** + **aws-sdk-client-mock** for tests
 - Auth: header `x-lumalens-key` must match the Lambda env var `LUMALENS_KEY`
 
 ### Why a Function URL instead of API Gateway
 
 The design targets **API Gateway HTTP API** in front of the Lambda. The AWS Academy **Cloud Foundations sandbox** used for this project blocks it: `apigateway:POST` is denied both for the sandbox user and for LabRole. It also denies `dynamodb:CreateTable` for the user, although CloudFormation running as LabRole can create the table.
 
-A **Lambda Function URL** sends the same payload format 2.0 event (`rawPath`, `requestContext.http.method`, headers, query string) that an HTTP API would, so the handler runs unchanged behind either. What the Function URL lacks is API Gateway's stage throttling. The API key check still applies, and the Lambda's 10 s timeout caps runaway calls. Moving to API Gateway later only means creating the HTTP API with the 5 routes (see [Intended: API Gateway](#intended-api-gateway-http-api)). No code changes.
+A **Lambda Function URL** sends the same payload format 2.0 event (`rawPath`, `requestContext.http.method`, headers, query string) that an HTTP API would, so the handler runs unchanged behind either. What the Function URL lacks is API Gateway's stage throttling. The API key check still applies, and the Lambda's 10 s timeout caps runaway calls. Moving to API Gateway later only means creating the HTTP API with the 6 routes (see [Intended: API Gateway](#intended-api-gateway-http-api)). No code changes.
 
 ## BugReport
 
@@ -39,10 +40,10 @@ A **Lambda Function URL** sends the same payload format 2.0 event (`rawPath`, `r
 | `posX`, `posY`, `posZ` | number | optional |
 | `coordSpace` | enum | `2d`, `3d`; optional |
 | `envSnapshot` | object | optional, free-form |
-| `logKey`, `screenshotKey` | string | optional |
+| `logKey`, `screenshotKey` | string | optional S3 keys. On update: max 200 chars, must start with `logs/` / `screenshots/` |
 | `createdAt`, `updatedAt` | string | ISO 8601, set by the server |
 
-Create bodies are strict: unknown fields and client-sent `id`/`createdAt`/`updatedAt` are rejected. Updates accept only `status`, `severity` and `description`, and need at least one of them.
+Create bodies are strict: unknown fields and client-sent `id`/`createdAt`/`updatedAt` are rejected. Updates accept only `status`, `severity`, `description`, `screenshotKey` and `logKey`, and need at least one of them.
 
 ## Routes
 
@@ -55,6 +56,23 @@ Every route requires the `x-lumalens-key` header (401 if missing or wrong).
 | `GET` | `/bugs/{id}` | 200 item | 404 `not_found` |
 | `PUT` | `/bugs/{id}` | 200 updated item | 400, 404 |
 | `DELETE` | `/bugs/{id}` | 204, empty body | 404 |
+| `POST` | `/uploads` | 201 `{ uploadUrl, key, contentType, expiresIn }` | 400, 404 `not_found` (unknown bug), 500 if `BUCKET_NAME` is unset |
+
+### Uploading a screenshot or log
+
+1. `POST /uploads` with `{ "bugId": "<id>", "kind": "screenshot" }` (or `"log"`). The bug must exist.
+2. `PUT` the file to `uploadUrl` with exactly the returned `Content-Type` (`image/png` for `screenshots/<bugId>.png`, `text/plain` for `logs/<bugId>.txt`) and no `x-lumalens-key`. S3 answers 200. The URL expires after `expiresIn` seconds (300).
+3. `PUT /bugs/{id}` with `{ "screenshotKey": "<key>" }` and/or `{ "logKey": "<key>" }`.
+
+`POST /uploads` doesn't touch the report, and the `POST /bugs` contract is unchanged.
+
+## Lambda environment variables
+
+| Variable | Value | Notes |
+|---|---|---|
+| `TABLE_NAME` | `LumaLensReports` | required by every route |
+| `LUMALENS_KEY` | your generated key | required; every request is 401 without it. Set it in the console only |
+| `BUCKET_NAME` | `lumalens-shots-542230` | required by `POST /uploads` (500 + a CloudWatch error if unset) |
 
 Unknown routes return 404. Unexpected errors return 500 `{"error":"internal_error"}` and are logged to CloudWatch.
 
@@ -76,10 +94,10 @@ From the repo root:
 npm ci
 npm run lint:openapi   # validate docs/openapi.yaml
 npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4)
-npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 5)
+npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 6)
 ```
 
-Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation template for the table), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
+Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation templates for the table and the bucket), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
 
 ## Deploy (AWS Academy sandbox)
 
@@ -154,7 +172,36 @@ node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt   # same, bu
 
 Transcripts are saved to `docs/evidence/` (git-ignored), with the key masked.
 
-### 5. Redeploying code changes
+### 5. S3 bucket and uploads (Week 13)
+
+> **Unverified in the sandbox:** whether LabRole can create the bucket through CloudFormation, and whether S3 accepts PUTs to URLs presigned with LabRole's credentials. Run the quick check in [docs/lab-guide.md, Step 5](docs/lab-guide.md#step-5--s3-bucket-and-uploads-week-13-10-min) first; it has the console fallback.
+
+In CloudShell, in the cloned repo (with `$R` from step 1):
+
+```bash
+git pull
+aws cloudformation create-stack --stack-name lumalens-bucket   --template-body file://infra/s3-bucket.yaml --role-arn $R
+aws cloudformation wait stack-create-complete --stack-name lumalens-bucket
+aws cloudformation describe-stacks --stack-name lumalens-bucket   --query 'Stacks[0].Outputs' --output table
+```
+
+Then deploy the new code (step 6) and add `BUCKET_NAME` = `lumalens-shots-542230` **in the console**: Lambda → `lumalens-api` → Configuration → Environment variables → Edit → Add environment variable. Keep `TABLE_NAME` and `LUMALENS_KEY`.
+
+> ⚠️ Don't use `aws lambda update-function-configuration --environment` for this. It **replaces all** environment variables, so unless you pass `TABLE_NAME` and `LUMALENS_KEY` again it deletes them, and passing the key puts it in your shell history. For reference only, the safe CLI form is:
+>
+> ```bash
+> aws lambda update-function-configuration --function-name lumalens-api >   --environment 'Variables={TABLE_NAME=LumaLensReports,LUMALENS_KEY=<your key>,BUCKET_NAME=lumalens-shots-542230}'
+> ```
+
+Test the uploads from your PC (same env vars as step 4):
+
+```powershell
+node scripts/test-crud.mjs --uploads --out docs/evidence/uploads-test.txt
+```
+
+It runs the normal CRUD cycle, then creates a second bug, presigns a screenshot and a log upload, PUTs a 1×1 PNG and a short text file to S3 (expects 200), stores both keys with `PUT /bugs/{id}`, and checks them with `GET`. The key and the presigned query strings are masked in the transcript. The second bug and both objects stay in place for the screenshots.
+
+### 6. Redeploying code changes
 
 From CloudShell, in the cloned repo:
 
@@ -167,7 +214,7 @@ Or locally with `npm run deploy`, after putting the session's AWS CLI credential
 
 ### Intended: API Gateway HTTP API
 
-Where API Gateway is allowed (for example a full Learner Lab), put an HTTP API in front of the same Lambda instead of the Function URL:
+Where API Gateway is allowed (for example a full Learner Lab), put an HTTP API in front of the same Lambda instead of the Function URL (add `POST /uploads` to the routes below):
 
 - API Gateway → **Create API** → HTTP API → Build. Integration: Lambda `lumalens-api` (payload format 2.0). API name `lumalens-http`.
 - Routes, all to that integration: `POST /bugs`, `GET /bugs`, `GET /bugs/{id}`, `PUT /bugs/{id}`, `DELETE /bugs/{id}`. Stage `$default`, auto-deploy on.

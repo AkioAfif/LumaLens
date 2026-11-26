@@ -33,17 +33,37 @@ export const BugReportCreate = z.strictObject({
 });
 export type BugReportCreate = z.infer<typeof BugReportCreate>;
 
-/** PUT /bugs/{id} body. Only status, severity, description; at least one required. */
+/** S3 object keys as returned by POST /uploads. */
+const screenshotKey = z.string().max(200).startsWith('screenshots/');
+const logKey = z.string().max(200).startsWith('logs/');
+
+/**
+ * PUT /bugs/{id} body. status, severity, description, and the S3 keys from POST /uploads
+ * (screenshotKey, logKey); at least one required.
+ */
 export const BugReportUpdate = z
   .strictObject({
     status: Status.optional(),
     severity: Severity.optional(),
     description: description.optional(),
+    screenshotKey: screenshotKey.optional(),
+    logKey: logKey.optional(),
   })
-  .refine((v) => v.status !== undefined || v.severity !== undefined || v.description !== undefined, {
-    message: 'At least one of status, severity, description is required',
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'At least one of status, severity, description, screenshotKey, logKey is required',
   });
 export type BugReportUpdate = z.infer<typeof BugReportUpdate>;
+
+/** What POST /uploads can presign a PUT for. */
+export const UploadKind = z.enum(['screenshot', 'log']);
+export type UploadKind = z.infer<typeof UploadKind>;
+
+/** POST /uploads body. Strict. */
+export const UploadRequest = z.strictObject({
+  bugId: z.uuid(),
+  kind: UploadKind,
+});
+export type UploadRequest = z.infer<typeof UploadRequest>;
 
 /** GET /bugs query string filters. */
 export const ListQuery = z.object({

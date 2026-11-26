@@ -1,0 +1,58 @@
+# S3 bucket for LumaLens screenshots and logs.
+# Clients never get bucket credentials: the lumalens-api Lambda presigns a short-lived PutObject
+# URL (POST /uploads) and the client PUTs the file straight to S3 with it.
+#
+# Deploy as LabRole, like the table. From CloudShell, in the repo root:
+#
+#   R=$(aws iam get-role --role-name LabRole --query Role.Arn --output text)
+#   aws cloudformation create-stack --stack-name lumalens-bucket \
+#     --template-body file://infra/s3-bucket.yaml --role-arn $R
+#   aws cloudformation wait stack-create-complete --stack-name lumalens-bucket
+#
+# Unverified in the AWS Academy sandbox: whether LabRole may create buckets through CloudFormation.
+# Fallback: create the bucket in the S3 console with the same settings (see docs/lab-guide.md, Step 5).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: LumaLens screenshot and log bucket (private, SSE-S3, logs/ expire after 30 days)
+Resources:
+  ShotsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: lumalens-shots-542230
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-logs
+            Status: Enabled
+            Prefix: logs/
+            ExpirationInDays: 30
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      CorsConfiguration:
+        CorsRules:
+          # Lets a browser build (WebGL) PUT to a presigned URL. Native builds (the Week 13
+          # Windows demo) don't need CORS at all.
+          # Week 14: narrow AllowedOrigins from "*" to the itch.io origin(s) the WebGL build is
+          # served from (itch.io embeds HTML5 games from its own CDN domain; check the real
+          # Origin header in the browser before narrowing).
+          - Id: presigned-put
+            AllowedMethods: [PUT]
+            AllowedOrigins: ["*"]
+            AllowedHeaders: [Content-Type]
+            MaxAge: 3000
+Outputs:
+  BucketName:
+    Description: Set this as the BUCKET_NAME env var on lumalens-api
+    Value: !Ref ShotsBucket
