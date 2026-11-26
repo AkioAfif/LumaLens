@@ -79,7 +79,7 @@ npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4
 npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 5)
 ```
 
-Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation template for the table), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
+Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation template for the table), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` (Unity package that sends reports, Week 13, see [its README](unity-client/README.md)) and `webgl-snippet/` (placeholder, Week 14+).
 
 ## Deploy (AWS Academy sandbox)
 
