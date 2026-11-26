@@ -6,7 +6,8 @@
   "scripts": {
     "lint:openapi": "redocly lint docs/openapi.yaml",
     "deploy": "node scripts/deploy.mjs",
-    "test:crud": "node scripts/test-crud.mjs"
+    "test:crud": "node scripts/test-crud.mjs",
+    "test:unity-e2e": "node scripts/unity-e2e/run.mjs"
   },
   "devDependencies": {
     "@redocly/cli": "^2.83.0"

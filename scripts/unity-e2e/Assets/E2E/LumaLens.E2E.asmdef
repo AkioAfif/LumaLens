@@ -1,0 +1,16 @@
+{
+    "name": "LumaLens.E2E",
+    "rootNamespace": "LumaLens.E2E",
+    "references": [
+        "LumaLens.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

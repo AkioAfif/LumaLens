@@ -76,6 +76,7 @@ From the repo root:
 npm ci
 npm run lint:openapi   # validate docs/openapi.yaml
 npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4)
+npm run test:unity-e2e # Unity client editor + build reports against the deployed API (docs/lab-guide.md, step 5)
 npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 5)
 ```
 

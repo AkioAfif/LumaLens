@@ -161,6 +161,23 @@ node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt
 
 ---
 
+## Step 5 — Unity client end-to-end (your PC, ~10 min)
+
+Needs Unity 6000.6.5f1 and **Unity Hub open and signed in** (batchmode gets its license from Hub). In the same PowerShell window as Step 4 (with `LUMALENS_API_URL` and `LUMALENS_KEY` set):
+
+```powershell
+npm run test:unity-e2e
+```
+
+The script builds a throwaway Unity project in your temp folder, runs a PlayMode test (`runContext: editor`), then builds and runs a small Windows player (`runContext: build`; a 960×540 window opens for ~15 s). Each sends a manual report, a `Debug.LogError` and an exception. The script then checks all six arrived through `GET /bugs?buildVersion=e2e-…` and prints the `envSnapshot` differences between editor and build. Expected: `RESULT: all checks passed`. The transcript is saved to `docs/evidence/unity-e2e.txt` with the key masked. The reports stay in the table.
+
+- 📸 The terminal output.
+- 📸 DynamoDB → **Explore items**, filtered on `buildVersion` = the run id, showing the editor and build reports.
+
+If only the API check needs repeating: `node scripts/unity-e2e/run.mjs --verify-only <run id>`.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
