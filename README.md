@@ -97,13 +97,13 @@ npm run test:crud      # CRUD cycle against the deployed API (see Deploy, step 4
 npm run deploy         # upload function.zip to lumalens-api (see Deploy, step 6)
 ```
 
-Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation templates for the table and the bucket), `docs/` (architecture, OpenAPI, design brief, lab guide; `docs/evidence/` is git-ignored), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
+Repo layout: `backend/` (Lambda source, tests, build script), `infra/` (CloudFormation templates for the table and the bucket), `docs/` (architecture, OpenAPI, design brief, lab guide), `scripts/` (deploy and CRUD test), `unity-client/` and `webgl-snippet/` (placeholders for later weeks).
 
 ## Deploy (AWS Academy sandbox)
 
 Everything goes in **us-east-1**, in the Cloud Foundations course → Modules → Sandbox → **Sandbox Lingkungan Hidup**. Step-by-step with screenshots to take: [docs/lab-guide.md](docs/lab-guide.md).
 
-- The sandbox **deletes every resource when the session ends** (180-minute timer), so deploy, test and capture evidence in one session.
+- The sandbox **deletes every resource when the session ends** (180-minute timer), so deploy and test in one session.
 - You can't create IAM roles: anything that needs a role uses the existing **LabRole**.
 - Everything is serverless and on-demand (no NAT Gateway), so the budget only pays for actual requests.
 - Run the AWS CLI from **CloudShell** in the console (it already has the sandbox credentials). The built-in terminal on the sandbox page has none.
@@ -167,10 +167,10 @@ The last command prints the URL, `https://<url-id>.lambda-url.us-east-1.on.aws/`
 $env:LUMALENS_API_URL = "https://<url-id>.lambda-url.us-east-1.on.aws"   # no trailing /
 $env:LUMALENS_KEY = "<key from step 0>"
 npm run test:crud    # 401 without key, POST 201, GET 200, list 200, PUT 200, DELETE 204, GET 404
-node scripts/test-crud.mjs --keep --out docs/evidence/crud-keep.txt   # same, but leaves one item
+node scripts/test-crud.mjs --keep   # same, but leaves one item
 ```
 
-Transcripts are saved to `docs/evidence/` (git-ignored), with the key masked.
+Each run saves a transcript with the key masked (see the top of `scripts/test-crud.mjs`).
 
 ### 5. S3 bucket and uploads (Week 13)
 
@@ -196,7 +196,7 @@ Then deploy the new code (step 6) and add `BUCKET_NAME` = `lumalens-shots-542230
 Test the uploads from your PC (same env vars as step 4):
 
 ```powershell
-node scripts/test-crud.mjs --uploads --out docs/evidence/uploads-test.txt
+node scripts/test-crud.mjs --uploads
 ```
 
 It runs the normal CRUD cycle, then creates a second bug, presigns a screenshot and a log upload, PUTs a 1×1 PNG and a short text file to S3 (expects 200), stores both keys with `PUT /bugs/{id}`, and checks them with `GET`. The key and the presigned query strings are masked in the transcript. The second bug and both objects stay in place for the screenshots.
