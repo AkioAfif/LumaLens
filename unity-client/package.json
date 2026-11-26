@@ -1,0 +1,17 @@
+{
+  "name": "com.lumalens.client",
+  "version": "0.1.0",
+  "displayName": "LumaLens Client",
+  "description": "Sends bug reports from Unity editor sessions and builds to a LumaLens API. Captures errors and exceptions automatically and attaches an environment snapshot so editor and build runs can be compared.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Akio Afif"
+  },
+  "samples": [
+    {
+      "displayName": "Demo",
+      "description": "On-screen buttons that send a manual report, log an error, throw an exception and trigger the float.Parse locale bug.",
+      "path": "Samples~/Demo"
+    }
+  ]
+}
