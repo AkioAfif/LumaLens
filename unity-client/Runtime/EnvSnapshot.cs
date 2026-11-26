@@ -28,7 +28,8 @@ namespace LumaLens
                 ["systemMemoryMB"] = SystemInfo.systemMemorySize,
                 ["qualityLevel"] = qualityLevel >= 0 && qualityLevel < qualityNameArray.Length ? qualityNameArray[qualityLevel] : qualityLevel.ToString(CultureInfo.InvariantCulture),
                 ["renderPipeline"] = pipeline != null ? pipeline.name : "built-in",
-                ["fps"] = Mathf.Round(averageFps),
+                // Not measured yet on the first frame; null is left out of the JSON rather than sent as 0.
+                ["fps"] = averageFps > 0f ? Mathf.Round(averageFps) : null,
                 ["targetFrameRate"] = Application.targetFrameRate,
                 ["vSyncCount"] = QualitySettings.vSyncCount,
                 ["locale"] = CultureInfo.CurrentCulture.Name,
